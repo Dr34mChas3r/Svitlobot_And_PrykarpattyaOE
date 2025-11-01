@@ -38,7 +38,7 @@ LOGS_DIR.mkdir(exist_ok=True)
 
 # Налаштування логування
 logging.basicConfig(
-    level=logging.INFO,
+    level=logging.DEBUG,  # Змінено на DEBUG для детальної діагностики
     format='[%(asctime)s] %(levelname)s: %(message)s',
     datefmt='%d.%m %H:%M',
     handlers=[
@@ -167,7 +167,21 @@ def fetch_schedule(target_date=None):
         response = requests.get(BE_SVITLO_API, headers=headers, timeout=10)
         response.raise_for_status()
         
-        data = response.json()
+        # Логуємо що прийшло для діагностики
+        logger.debug(f"Response status: {response.status_code}")
+        logger.debug(f"Response headers: {response.headers.get('content-type')}")
+        logger.debug(f"Response text (first 200 chars): {response.text[:200]}")
+        
+        # Перевіряємо чи це JSON
+        if not response.text.strip():
+            logger.error("Сервер повернув порожню відповідь")
+            return None
+        
+        try:
+            data = response.json()
+        except ValueError as e:
+            logger.error(f"Відповідь не є валідним JSON. Текст відповіді: {response.text[:500]}")
+            return None
         
         # Якщо дата не вказана, беремо сьогодні
         if target_date is None:
@@ -191,10 +205,13 @@ def fetch_schedule(target_date=None):
         return []
         
     except requests.RequestException as e:
-        logger.error(f"Помилка запиту до be-svitlo: {e}")
+        logger.error(f"Помилка HTTP запиту до be-svitlo: {e}")
+        return None
+    except ValueError as e:
+        logger.error(f"Помилка парсингу JSON: {e}")
         return None
     except Exception as e:
-        logger.error(f"Помилка обробки даних: {e}")
+        logger.error(f"Несподівана помилка при отриманні графіка: {e}")
         return None
 
 def send_to_svitlobot(timetable_data):
@@ -222,6 +239,17 @@ def sync_schedule():
     # Завантажуємо дані тижня
     week_data = load_week_data()
     has_changes = False
+    
+    # Поточний день тижня (0=Пн, 6=Нд)
+    current_weekday = datetime.now().weekday()
+    
+    # ВАЖЛИВО: Очищаємо всі попередні дні цього тижня
+    # Вони вже минули і не повинні показуватись на наступний тиждень
+    for past_day in range(current_weekday):
+        if week_data['days'][past_day] != "0" * 24:
+            week_data['days'][past_day] = "0" * 24
+            has_changes = True
+            logger.info(f"🧹 Очищено минулий день: {day_names[past_day]}")
     
     # Оновлюємо сьогодні та завтра
     for day_offset in [0, 1]:  # 0 = сьогодні, 1 = завтра
