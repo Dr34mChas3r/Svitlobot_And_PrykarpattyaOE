@@ -130,14 +130,15 @@ def build_day_string(schedule_data, target_date=None):
         if from_h is None or to_h is None:
             continue
 
-        # Обробляємо перший час
+        # Обробляємо початок відключення
         if from_m == 0:
             start_hour = from_h
         elif from_m == 30:
-            hours[from_h] = '3'  # Друга половина години
+            if from_h < 24:
+                hours[from_h] = '3'  # Друга половина години
             start_hour = from_h + 1
         else:
-            # Якщо хвилини не 0 і не 30, округлюємо до найближчої половини години
+            # Округлюємо до найближчої половини години
             if from_m < 30:
                 hours[from_h] = '2'  # Перша половина
                 start_hour = from_h + 1
@@ -145,13 +146,19 @@ def build_day_string(schedule_data, target_date=None):
                 hours[from_h] = '3'  # Друга половина
                 start_hour = from_h + 1
 
-        # Обробляємо останній час
-        if to_m == 0:
+        # Обробляємо кінець відключення
+        # ВАЖЛИВО: 00:00 означає кінець дня (24-та година)
+        if to_h == 0 and to_m == 0:
+            # Відключення до кінця дня (23:59)
+            end_hour = 23
+        elif to_m == 0:
+            # Відключення до початку години (наприклад, до 06:00 = до 05:59)
             end_hour = to_h - 1
         elif to_m == 30:
-            end_hour = to_h - 1
-            if end_hour >= start_hour:
+            # Відключення до половини години
+            if to_h > 0:
                 hours[to_h] = '2'  # Перша половина години
+            end_hour = to_h - 1
         else:
             # Округлюємо до найближчої половини години
             if to_m <= 30:
@@ -163,11 +170,10 @@ def build_day_string(schedule_data, target_date=None):
 
         # Заповнюємо повні години між початком і кінцем
         for h in range(start_hour, min(end_hour + 1, 24)):
-            if hours[h] == '0':
+            if h < 24 and hours[h] == '0':
                 hours[h] = '1'
 
     return ''.join(hours)
-
 
 def merge_day_strings(old_string, new_string, target_date):
     """
