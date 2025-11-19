@@ -1,4 +1,4 @@
-#!/usr/bin/env python3
+#!/usr/bin/env python3 
 """
 СвітлоБот-синхронізатор v2.0
 Автоматично синхронізує графік відключень з be-svitlo до svitlobot.in.ua
